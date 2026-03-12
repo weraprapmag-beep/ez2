@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>Untitled</title>
+    
+
+  </head>
+    
+  <body>
+  <!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Math-Man: No More Bugs!</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;600&family=Press+Start+2P&display=swap');
+        
+        body { background: #1a1a1a; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; font-family: 'Kanit', sans-serif; touch-action: none; overflow: hidden; }
+        .overlay { position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; text-align: center; background: rgba(0,0,0,0.9); backdrop-filter: blur(8px); }
+        #game-container { position: relative; margin-top: 10px; padding: 10px; background: #2a2a2a; border-radius: 15px; border: 4px solid #444; }
+        #ui { width: 300px; display: flex; justify-content: space-between; padding-bottom: 8px; font-family: 'Press Start 2P', cursive; font-size: 8px; }
+        canvas { display: block; border-radius: 8px; border: 2px solid #fff; }
+        
+        .controls-grid { margin-top: 20px; display: grid; grid-template-areas: "none1 up none2" "left down right"; gap: 10px; }
+        .btn-modern { width: 70px; height: 70px; background: #3c3c3c; border: none; border-radius: 15px; position: relative; cursor: pointer; box-shadow: 0 4px 0 #222; display: flex; align-items: center; justify-content: center; }
+        .btn-modern:active { transform: translateY(2px); box-shadow: 0 2px 0 #222; background: #555; }
+        .icon { width: 0; height: 0; border-style: solid; }
+        .up-tri { border-width: 0 12px 18px 12px; border-color: transparent transparent #ffffff transparent; }
+        .down-tri { border-width: 18px 12px 0 12px; border-color: #ffffff transparent transparent transparent; }
+        .left-tri { border-width: 12px 18px 12px 0; border-color: transparent #ffffff transparent transparent; }
+        .right-tri { border-width: 12px 0 12px 18px; border-color: transparent transparent transparent #ffffff; }
+        #up { grid-area: up; } #down { grid-area: down; } #left { grid-area: left; } #right { grid-area: right; }
+        
+        #math-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border: 6px solid #f1c40f; padding: 25px; width: 280px; border-radius: 20px; z-index: 200; color: #000; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+        input { width: 80%; padding: 12px; margin: 15px 0; font-size: 1.2rem; text-align: center; border-radius: 10px; border: 2px solid #ddd; outline: none; }
+        .btn-submit { width: 100%; background: #222; color: #fff; padding: 15px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="start-screen" class="overlay">
+    <h1 style="font-family:'Press Start 2P'; color:#f1c40f;">MATH-MAN 100</h1>
+    <p>เคลียร์แมพ ตอบคำถาม ลุยด่านต่อไป!</p>
+    <button onclick="initGame()" style="padding:15px 40px; background:#f1c40f; color:#000; border:none; border-radius:30px; font-weight:bold; cursor:pointer; margin-top:20px;">เริ่มเกมเลย</button>
+</div>
+
+<div id="game-over-screen" class="overlay" style="display:none">
+    <h1 style="color:#ff4d4d;">GAME OVER</h1>
+    <p id="level-reach"></p>
+    <button onclick="resetGame()" style="padding:12px 25px; background:#f1c40f; color:#000; border:none; border-radius:10px; cursor:pointer;">ลองใหม่อีกครั้ง</button>
+</div>
+
+<div id="math-modal">
+    <h3 id="q-header" style="margin:0; color:#888; font-size:0.8rem;"></h3>
+    <p id="q-text" style="font-weight:bold; margin:20px 0; font-size: 1.1rem;"></p>
+    <input type="text" id="ans-input" placeholder="ใส่คำตอบที่นี่" autocomplete="off">
+    <button class="btn-submit" onclick="submitAnswer()">ส่งคำตอบ</button>
+</div>
+
+<div id="game-container">
+    <div id="ui">
+        <div>LVL:<span id="lvl">1</span></div>
+        <div id="status" style="color:#f1c40f">PATROL</div>
+        <div>SCORE:<span id="score">0</span></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<div class="controls-grid">
+    <button class="btn-modern" id="up"><div class="icon up-tri"></div></button>
+    <button class="btn-modern" id="left"><div class="icon left-tri"></div></button>
+    <button class="btn-modern" id="down"><div class="icon down-tri"></div></button>
+    <button class="btn-modern" id="right"><div class="icon right-tri"></div></button>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const TILE = 30; canvas.width = 300; canvas.height = 300;
+
+let score = 0, currentLevel = 1, gameRunning = false, activeDir = null, animationId = null;
+let dots = [], maze = [], themeColor = "#9bbc0f";
+let pacman = { x: 45, y: 45, speed: 2.5 };
+let ghost = { x: 255, y: 225, speed: 1.0, dir: {x:-1, y:0}, isChasing: false, timer: 0 };
+
+const questions = [
+    {q: "มีเสื้อ 5 ตัว กางเกง 3 ตัว จัดชุดต่างกันได้กี่วิธี?", a: "15"},
+    {q: "โยนเหรียญ 3 อันพร้อมกัน จำนวนหน้าที่จะเกิดได้ทั้งหมด?", a: "8"},
+    {q: "สลับอักษรคำว่า 'CAT' ได้กี่วิธี?", a: "6"},
+    {q: "ทอยลูกเต๋า 2 ลูก โอกาสที่แต้มรวมจะเป็น 12?", a: "1/36"},
+    {q: "แฟกทอเรียลของ 4 (4!) มีค่าเท่าใด?", a: "24"}
+];
+
+const safeMap = [
+    [1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,0,1,1,1,0,1],
+    [1,0,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,0,1,1,1,0,1],
+    [1,0,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,1,1,1,0,1],
+    [1,1,1,1,1,1,1,1,1,1]
+];
+
+function resetGame() {
+    currentLevel = 1;
+    score = 0;
+    initGame();
+}
+
+function initGame() {
+    document.getElementById("start-screen").style.display = "none";
+    document.getElementById("game-over-screen").style.display = "none";
+    document.getElementById("math-modal").style.display = "none";
+    
+    maze = JSON.parse(JSON.stringify(safeMap)); 
+    const colors = ["#283048", "#1e3c72", "#4b79a1", "#8b956d", "#9bbc0f"];
+    themeColor = colors[currentLevel % colors.length];
+
+    loadLevel();
+    gameRunning = true;
+    
+    // ตรงนี้คือจุดที่แก้บั๊ก! ยกเลิกลูปเก่าที่ค้างอยู่ แล้วบังคับรันลูปใหม่เลย
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+    }
+    gameLoop();
+}
+
+function loadLevel() {
+    dots = [];
+    for(let r=0; r<10; r++) {
+        for(let c=0; c<10; c++) {
+            if(maze[r][c] === 0) {
+                dots.push({x: c*TILE+15, y: r*TILE+15, eaten: false});
+            }
+        }
+    }
+    pacman.x = 45; pacman.y = 45; 
+    ghost.x = 255; ghost.y = 225;
+    ghost.dir = {x: -1, y: 0}; 
+    ghost.speed = 1.0 + (currentLevel * 0.05);
+    activeDir = null; 
+    document.getElementById("lvl").innerText = currentLevel;
+}
+
+function canSeePlayer() {
+    let dx = pacman.x - ghost.x, dy = pacman.y - ghost.y;
+    let dist = Math.hypot(dx, dy);
+    if (dist > 100) return false; 
+    let steps = 10;
+    for(let i=1; i<=steps; i++) {
+        let cx = ghost.x + (dx/steps)*i, cy = ghost.y + (dy/steps)*i;
+        if(maze[Math.floor(cy/TILE)][Math.floor(cx/TILE)] === 1) return false;
+    }
+    return true;
+}
+
+function checkWall(x, y) {
+    let p = 8;
+    return maze[Math.floor((y-p)/TILE)][Math.floor((x-p)/TILE)] === 1 || 
+           maze[Math.floor((y+p)/TILE)][Math.floor((x+p)/TILE)] === 1 ||
+           maze[Math.floor((y-p)/TILE)][Math.floor((x+p)/TILE)] === 1 ||
+           maze[Math.floor((y+p)/TILE)][Math.floor((x-p)/TILE)] === 1;
+}
+
+function gameLoop() {
+    if(!gameRunning) return; // ถ้าเกมหยุด ไม่ต้องทำอะไร ปล่อยลูปตายไปเลย (แก้จุดนี้ด้วย)
+
+    let nx = 0, ny = 0;
+    if(activeDir === "up") ny = -pacman.speed;
+    else if(activeDir === "down") ny = pacman.speed;
+    else if(activeDir === "left") nx = -pacman.speed;
+    else if(activeDir === "right") nx = pacman.speed;
+    if(!checkWall(pacman.x + nx, pacman.y + ny)) { pacman.x += nx; pacman.y += ny; }
+
+    let seen = canSeePlayer();
+    if(seen) { ghost.isChasing = true; ghost.timer = 0; }
+    else if(ghost.isChasing) { ghost.timer += 16; if(ghost.timer > 1500) ghost.isChasing = false; }
+
+    let gs = ghost.isChasing ? ghost.speed * 1.3 : ghost.speed;
+    if (Math.abs(ghost.x % TILE - 15) < 5 && Math.abs(ghost.y % TILE - 15) < 5) {
+        let opts = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}].filter(d => !checkWall(ghost.x+d.x*TILE, ghost.y+d.y*TILE));
+        let fwdOpts = opts.filter(o => o.x !== -ghost.dir.x || o.y !== -ghost.dir.y);
+        let finalOpts = fwdOpts.length > 0 ? fwdOpts : opts;
+        if(ghost.isChasing) finalOpts.sort((a,b) => Math.hypot(ghost.x+a.x*TILE-pacman.x, ghost.y+a.y*TILE-pacman.y) - Math.hypot(ghost.x+b.x*TILE-pacman.x, ghost.y+b.y*TILE-pacman.y));
+        else finalOpts = [finalOpts[Math.floor(Math.random()*finalOpts.length)]];
+        ghost.dir = finalOpts[0] || ghost.dir;
+    }
+    ghost.x += ghost.dir.x * gs; ghost.y += ghost.dir.y * gs;
+
+    ctx.fillStyle = "#000000"; ctx.fillRect(0,0,300,300);
+    
+    maze.forEach((row, r) => row.forEach((cell, c) => { 
+        if(cell === 1) { 
+            ctx.fillStyle = themeColor; 
+            ctx.fillRect(c*TILE, r*TILE, TILE, TILE); 
+        }
+    }));
+    
+    let activeDots = 0;
+    dots.forEach(d => { if(!d.eaten) { 
+        activeDots++;
+        ctx.fillStyle="#ffffff"; 
+        ctx.beginPath(); ctx.arc(d.x, d.y, 3, 0, Math.PI * 2); ctx.fill(); 
+        if(Math.hypot(pacman.x-d.x, pacman.y-d.y)<15) { d.eaten=true; score+=10; }
+    }});
+
+    // หยุดเกมแล้วโชว์คำถาม
+    if(activeDots === 0) {
+        gameRunning = false;
+        showMath();
+        return; 
+    }
+
+    // ตรวจจับ Game Over
+    if(Math.hypot(pacman.x-ghost.x, pacman.y-ghost.y)<18) {
+        gameRunning = false; 
+        document.getElementById("level-reach").innerText = "คุณหยุดอยู่ที่เลเวล: " + currentLevel;
+        document.getElementById("game-over-screen").style.display = "flex";
+        return;
+    }
+
+    ctx.fillStyle = ghost.isChasing ? "red" : "#888";
+    ctx.fillRect(ghost.x-10, ghost.y-10, 20, 20);
+    ctx.fillStyle = "#f1c40f"; 
+    ctx.beginPath(); ctx.arc(pacman.x, pacman.y, 10, 0.2*Math.PI, 1.8*Math.PI); ctx.lineTo(pacman.x, pacman.y); ctx.fill();
+
+    document.getElementById("score").innerText = score;
+    document.getElementById("status").innerText = ghost.isChasing ? "⚠ CHASING" : "PATROL";
+    
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+function showMath() {
+    let q = questions[Math.floor(Math.random()*questions.length)];
+    document.getElementById("q-header").innerText = "LEVEL " + currentLevel + " CLEAR!";
+    document.getElementById("q-text").innerText = q.q;
+    window.ans = q.a;
+    document.getElementById("math-modal").style.display = "block";
+    
+    // ตั้งเวลาให้ปุ่มถูกดึง focus กลับไปที่ input ป้องกันบั๊กมือถือ
+    setTimeout(() => document.getElementById("ans-input").focus(), 100);
+}
+
+function submitAnswer() {
+    let userInput = document.getElementById("ans-input").value.trim();
+    if(userInput === window.ans) {
+        currentLevel++; 
+        document.getElementById("ans-input").value = ""; 
+        initGame(); 
+    } else { 
+        alert("คำตอบไม่ถูกต้อง! ลองคิดดูใหม่นะ"); 
+        document.getElementById("ans-input").value = "";
+        document.getElementById("ans-input").focus();
+    }
+}
+
+// ควบคุม
+["up","down","left","right"].forEach(id => {
+    const btn = document.getElementById(id);
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); activeDir = id; });
+    btn.addEventListener("pointerup", () => activeDir = null);
+});
+</script>
+</body>
+</html>
+    
+  </body>
+  
+</html>
